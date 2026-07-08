@@ -17,10 +17,9 @@ from app.services.booking_service import (
     start_booking,
     complete_booking,
 )
-from app.services.booking_service import create_booking
 
-from app.core.dependencies import get_current_user
-
+from app.core.dependencies import require_role
+from app.enums.user import UserRole
 from app.models.user import User
 
 
@@ -35,22 +34,10 @@ router = APIRouter(
     response_model=BookingResponse,
     status_code=201,
 )
-@router.get(
-    "/my",
-    response_model=List[BookingResponse]
-)
-def my_bookings(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    return get_customer_bookings(
-        db,
-        current_user.id,
-    )
 def book_car(
     booking: BookingCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.CUSTOMER)),
 ):
 
     return create_booking(
@@ -58,18 +45,33 @@ def book_car(
         booking,
         current_user.id,
     )
+
+@router.get(
+    "/my",
+    response_model=List[BookingResponse]
+)
+def my_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.CUSTOMER)),
+):
+    return get_customer_bookings(
+        db,
+        current_user.id,
+    )
+
 @router.get(
     "/owner",
     response_model=List[BookingResponse]
 )
 def owner_bookings(
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
     return get_owner_bookings(
         db,
         current_user.id,
     )
+
 @router.patch(
     "/{booking_id}/approve",
     response_model=BookingResponse
@@ -77,13 +79,14 @@ def owner_bookings(
 def approve_booking_endpoint(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
     return approve_booking(
         db,
         booking_id,
         current_user.id,
     )
+
 @router.patch(
     "/{booking_id}/reject",
     response_model=BookingResponse
@@ -91,13 +94,14 @@ def approve_booking_endpoint(
 def reject_booking_endpoint(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
     return reject_booking(
         db,
         booking_id,
         current_user.id,
     )
+
 @router.patch(
     "/{booking_id}/start",
     response_model=BookingResponse
@@ -105,13 +109,14 @@ def reject_booking_endpoint(
 def start_booking_endpoint(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
     return start_booking(
         db,
         booking_id,
         current_user.id,
     )
+
 @router.patch(
     "/{booking_id}/complete",
     response_model=BookingResponse
@@ -119,7 +124,7 @@ def start_booking_endpoint(
 def complete_booking_endpoint(
     booking_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
     return complete_booking(
         db,

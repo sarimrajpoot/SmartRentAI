@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.database.connection import get_db
+from app.database.dependencies import get_db
 from app.schemas.car import CarCreate, CarResponse
 from app.services.car_service import create_car
-from app.core.dependencies import get_current_user
+from app.core.dependencies import require_role
+from app.enums.user import UserRole
 from app.models.user import User
 
 router = APIRouter(
@@ -21,7 +22,7 @@ router = APIRouter(
 def register_car(
     car: CarCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
     return create_car(
         db=db,

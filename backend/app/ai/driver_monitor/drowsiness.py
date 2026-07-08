@@ -8,12 +8,11 @@ from app.ai.driver_monitor.face_mesh import (
 
 from app.ai.driver_monitor.eye_utils import eye_aspect_ratio
 from app.ai.driver_monitor.mouth import calculate_mar
-from app.ai.driver_monitor.state import driver_state
 from app.ai.driver_monitor.yawn import update_yawn_state
 from app.ai.driver_monitor.config import EAR_THRESHOLD
 
 
-def detect_drowsiness(image_path):
+def detect_drowsiness(image_path, state):
 
     image = cv2.imread(image_path)
 
@@ -51,7 +50,7 @@ def detect_drowsiness(image_path):
 
     mar = calculate_mar(landmarks)
     
-    yawn = update_yawn_state(mar, driver_state)
+    yawn = update_yawn_state(mar, state)
 
     return {
         "drowsy": ear < EAR_THRESHOLD,

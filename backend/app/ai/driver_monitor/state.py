@@ -13,6 +13,3 @@ class DriverState:
         self.perclos = 0.0
         
         self.yawn_count = 0
-
-
-driver_state = DriverState()

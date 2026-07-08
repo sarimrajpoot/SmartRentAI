@@ -8,19 +8,31 @@ from alembic import context
 import os
 import sys
 
+from dotenv import load_dotenv
+
 sys.path.append(
     os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..")
     )
 )
 
+# Load .env before importing app modules so that Pydantic Settings
+# and any os.environ reads pick up the correct values.
+load_dotenv()
+
 from app.database.connection import Base
 import app.models
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Override sqlalchemy.url from the DATABASE_URL environment variable.
+# This takes precedence over the placeholder value in alembic.ini so that
+# migrations work in CI/CD and on any machine without editing the .ini file.
+db_url = os.environ.get("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

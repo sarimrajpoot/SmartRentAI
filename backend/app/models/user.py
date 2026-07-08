@@ -1,9 +1,11 @@
-from sqlalchemy import Column, String, Float, Boolean, DateTime
+from sqlalchemy import Column, String, Float, Boolean, DateTime, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.connection import Base
 import uuid
 from datetime import datetime
 from sqlalchemy.orm import relationship
+
+from app.enums.user import UserRole
 
 class User(Base):
     __tablename__ = "users"
@@ -18,7 +20,7 @@ class User(Base):
 
     password_hash = Column(String, nullable=False)
 
-    role = Column(String, nullable=False)
+    role = Column(Enum(UserRole), nullable=False)
 
     cnic = Column(String)
 
