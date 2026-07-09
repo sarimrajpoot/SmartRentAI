@@ -59,6 +59,8 @@ class Car(Base):
 
     is_available = Column(Boolean, default=True)
 
+    image_url = Column(String, nullable=True)
+
     gps_device_id = Column(String)
 
     fuel_sensor_id = Column(String)
