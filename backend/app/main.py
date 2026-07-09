@@ -3,12 +3,9 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
 from app.core.config import settings
 from app.database.connection import Base, engine
-
 import app.models
-
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.cars import router as cars_router
 from app.api.endpoints.bookings import router as booking_router
