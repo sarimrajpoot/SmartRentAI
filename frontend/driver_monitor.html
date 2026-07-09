@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartRent AI — Driver Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Design Tokens ──────────────────────────────────────────────────── */
+    :root {
+      --bg:           #0d0f1a;
+      --surface:      #141622;
+      --surface2:     #1c1f30;
+      --border:       #252840;
+      --accent:       #6c63ff;
+      --accent2:      #48d3aa;
+      --danger:       #ff4d6d;
+      --warn:         #f59e0b;
+      --success:      #22c55e;
+      --text:         #e8eaf6;
+      --muted:        #8891b8;
+      --card-radius:  16px;
+      --font:         'Inter', system-ui, sans-serif;
+      --glow-purple:  0 0 24px rgba(108,99,255,0.35);
+      --glow-green:   0 0 24px rgba(72,211,170,0.35);
+      --glow-red:     0 0 24px rgba(255,77,109,0.35);
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      width: 100%;
+      background: linear-gradient(135deg, #1a1c2e 0%, #0d0f1a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: var(--glow-purple);
+    }
+    header h1 {
+      font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em;
+    }
+    header h1 span { color: var(--accent); }
+    .badge {
+      margin-left: auto;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em;
+      background: rgba(108,99,255,0.15); color: var(--accent);
+      border: 1px solid rgba(108,99,255,0.4);
+      padding: 4px 10px; border-radius: 99px;
+      text-transform: uppercase;
+    }
+
+    /* ── Main Layout ─────────────────────────────────────────────────────── */
+    main {
+      width: 100%; max-width: 1400px;
+      padding: 32px 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 24px;
+      transition: box-shadow 0.3s;
+    }
+    .card:hover { box-shadow: var(--glow-purple); }
+    .card-title {
+      font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+    }
+    .card-title .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── Camera Panel ────────────────────────────────────────────────────── */
+    #camera-panel { grid-row: 1 / 3; }
+    .video-wrapper {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0a0b12;
+      border: 2px solid var(--border);
+      aspect-ratio: 4/3;
+    }
+    #webcam {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scaleX(-1); /* mirror so it feels like a selfie camera */
+    }
+    #canvas { display: none; }
+
+    /* Status overlay on video */
+    .video-status {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      padding: 20px 16px 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-dot.error  { background: var(--danger);  box-shadow: 0 0 8px var(--danger); }
+    #status-text { font-size: 0.82rem; color: var(--muted); }
+
+    /* Controls */
+    .controls {
+      display: flex; gap: 10px; margin-top: 16px;
+    }
+    .btn {
+      flex: 1; padding: 12px 20px;
+      border: none; border-radius: 10px; cursor: pointer;
+      font-family: var(--font); font-size: 0.88rem; font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff;
+      box-shadow: var(--glow-purple);
+    }
+    .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.1); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-danger {
+      background: rgba(255,77,109,0.12);
+      color: var(--danger); border: 1px solid rgba(255,77,109,0.35);
+    }
+    .btn-danger:hover { background: rgba(255,77,109,0.22); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    /* Auth section */
+    .auth-section {
+      margin-top: 18px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .auth-section label {
+      font-size: 0.78rem; color: var(--muted); display: block; margin-bottom: 6px;
+    }
+    .auth-section input {
+      width: 100%; padding: 9px 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-family: var(--font);
+      font-size: 0.85rem;
+    }
+    .auth-section input:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(108,99,255,0.2);
+    }
+
+    /* ── Risk Score ──────────────────────────────────────────────────────── */
+    .risk-panel {
+      text-align: center;
+    }
+    .risk-gauge-wrapper {
+      position: relative;
+      width: 160px; height: 160px;
+      margin: 0 auto 16px;
+    }
+    .risk-gauge {
+      width: 100%; height: 100%;
+      transform: rotate(-90deg);
+    }
+    .gauge-bg { fill: none; stroke: var(--surface2); stroke-width: 12; }
+    .gauge-fill {
+      fill: none; stroke-width: 12;
+      stroke-linecap: round;
+      stroke: var(--accent2);
+      transition: stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1),
+                  stroke 0.5s;
+    }
+    .risk-number {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 2.8rem; font-weight: 800;
+      letter-spacing: -0.04em;
+      transition: color 0.5s;
+    }
+    .risk-label {
+      font-size: 0.85rem; color: var(--muted); margin-bottom: 8px;
+    }
+    .risk-level-badge {
+      display: inline-block;
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 4px 14px; border-radius: 99px; text-transform: uppercase;
+      transition: all 0.4s;
+    }
+
+    /* ── Alerts ──────────────────────────────────────────────────────────── */
+    .alerts-list {
+      display: flex; flex-direction: column; gap: 8px;
+      min-height: 60px;
+    }
+    .alert-item {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,77,109,0.1); border: 1px solid rgba(255,77,109,0.3);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 0.88rem; font-weight: 500;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .no-alerts {
+      color: var(--muted); font-size: 0.85rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .no-alerts::before { content: '✓'; color: var(--success); font-weight: 700; }
+
+    /* ── Metric Grid ─────────────────────────────────────────────────────── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 600px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .metric-card {
+      background: var(--surface2);
+      border-radius: 12px; padding: 16px;
+      border: 1px solid var(--border);
+      position: relative; overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .metric-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      opacity: 0; transition: opacity 0.4s;
+    }
+    .metric-card.active::before { opacity: 1; }
+    .metric-label {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.07em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 10px;
+    }
+    .metric-value {
+      font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em;
+      transition: color 0.4s;
+    }
+    .metric-sub {
+      font-size: 0.72rem; color: var(--muted); margin-top: 4px;
+    }
+    .metric-icon { font-size: 1.1rem; float: right; }
+
+    /* Status pill inside metric */
+    .pill {
+      display: inline-block; padding: 2px 10px; border-radius: 99px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; margin-top: 6px;
+    }
+    .pill-ok   { background: rgba(34,197,94,0.15);  color: var(--success); }
+    .pill-warn { background: rgba(245,158,11,0.15); color: var(--warn); }
+    .pill-bad  { background: rgba(255,77,109,0.15); color: var(--danger); }
+
+    /* ── PERCLOS Bar ─────────────────────────────────────────────────────── */
+    .perclos-bar-bg {
+      height: 6px; border-radius: 99px;
+      background: var(--surface); margin-top: 8px; overflow: hidden;
+    }
+    .perclos-bar-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+      width: 0%;
+    }
+
+    /* ── Frames counter ──────────────────────────────────────────────────── */
+    .fps-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 16px;
+      padding: 10px 14px; background: var(--surface2); border-radius: 10px;
+      font-size: 0.82rem; color: var(--muted);
+    }
+    .fps-row span { color: var(--text); font-weight: 600; }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    footer {
+      margin-top: auto; padding: 20px;
+      font-size: 0.75rem; color: var(--muted); text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo-icon">🚗</div>
+  <h1><span>SmartRent</span> AI · Driver Monitor</h1>
+  <span class="badge" id="mode-badge">Idle</span>
+</header>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- LEFT — Camera + Controls -->
+  <div class="card" id="camera-panel">
+    <div class="card-title"><div class="dot"></div> Live Camera Feed</div>
+
+    <div class="video-wrapper">
+      <video id="webcam" autoplay muted playsinline></video>
+      <canvas id="canvas"></canvas>
+      <div class="video-status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Camera not started</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="btn-start">▶ Start Monitoring</button>
+      <button class="btn btn-danger"  id="btn-stop" disabled>■ Stop</button>
+    </div>
+
+    <div class="auth-section">
+      <label for="token-input">🔑 JWT Bearer Token</label>
+      <input type="password" id="token-input" placeholder="Paste your access token here…" />
+    </div>
+    <div class="auth-section" style="margin-top:10px">
+      <label for="session-input">🆔 Session ID (optional)</label>
+      <input type="text" id="session-input"
+             placeholder="Leave blank to use user ID" />
+    </div>
+
+    <div class="fps-row">
+      Frames sent: <span id="frame-count">0</span>
+      &nbsp;·&nbsp; Errors: <span id="error-count">0</span>
+      &nbsp;·&nbsp; Last latency: <span id="latency">—</span>
+    </div>
+  </div>
+
+  <!-- RIGHT TOP — Risk Score -->
+  <div class="card risk-panel">
+    <div class="card-title"><div class="dot" style="background:var(--danger)"></div> Risk Score</div>
+
+    <div class="risk-gauge-wrapper">
+      <svg class="risk-gauge" viewBox="0 0 120 120">
+        <circle class="gauge-bg"   cx="60" cy="60" r="48" />
+        <circle class="gauge-fill" cx="60" cy="60" r="48"
+                id="gauge-fill"
+                stroke-dasharray="301.6"
+                stroke-dashoffset="301.6" />
+      </svg>
+      <div class="risk-number" id="risk-number">—</div>
+    </div>
+
+    <div class="risk-label">Composite driver risk (0 – 100)</div>
+    <div class="risk-level-badge pill pill-ok" id="risk-badge">Waiting…</div>
+
+    <!-- Alerts -->
+    <div style="margin-top: 24px;">
+      <div class="card-title" style="margin-bottom:12px">
+        <div class="dot" style="background:var(--danger)"></div> Active Alerts
+      </div>
+      <div class="alerts-list" id="alerts-list">
+        <div class="no-alerts">No alerts — monitoring not started</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT BOTTOM — Live Metrics -->
+  <div class="card">
+    <div class="card-title"><div class="dot" style="background:var(--accent2)"></div> Live Metrics</div>
+
+    <div class="metrics-grid">
+
+      <!-- EAR -->
+      <div class="metric-card" id="mc-ear">
+        <div class="metric-label">EAR <span class="metric-icon">👁</span></div>
+        <div class="metric-value" id="mv-ear">—</div>
+        <div class="metric-sub">Eye Aspect Ratio</div>
+        <div class="pill pill-ok" id="mp-ear">—</div>
+      </div>
+
+      <!-- Drowsy -->
+      <div class="metric-card" id="mc-drowsy">
+        <div class="metric-label">Drowsy <span class="metric-icon">😴</span></div>
+        <div class="metric-value" id="mv-drowsy">—</div>
+        <div class="metric-sub">Status</div>
+        <div class="pill pill-ok" id="mp-drowsy">—</div>
+      </div>
+
+      <!-- Eye Closed -->
+      <div class="metric-card" id="mc-eye">
+        <div class="metric-label">Eye State <span class="metric-icon">🔵</span></div>
+        <div class="metric-value" id="mv-eye">—</div>
+        <div class="metric-sub">Current frame</div>
+      </div>
+
+      <!-- Blinks -->
+      <div class="metric-card" id="mc-blink">
+        <div class="metric-label">Blinks <span class="metric-icon">✦</span></div>
+        <div class="metric-value" id="mv-blink">—</div>
+        <div class="metric-sub">Session total</div>
+      </div>
+
+      <!-- Yawns -->
+      <div class="metric-card" id="mc-yawn">
+        <div class="metric-label">Yawns <span class="metric-icon">😮</span></div>
+        <div class="metric-value" id="mv-yawn">—</div>
+        <div class="metric-sub" id="ms-mar">MAR —</div>
+      </div>
+
+      <!-- Phone -->
+      <div class="metric-card" id="mc-phone">
+        <div class="metric-label">Phone <span class="metric-icon">📱</span></div>
+        <div class="metric-value" id="mv-phone">—</div>
+        <div class="metric-sub">YOLO detection</div>
+        <div class="pill pill-ok" id="mp-phone">—</div>
+      </div>
+
+    </div>
+
+    <!-- PERCLOS bar -->
+    <div style="margin-top: 20px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div class="metric-label" style="text-transform:uppercase;font-size:.72rem">
+          PERCLOS — % Eyes Closed
+        </div>
+        <div style="font-size:.82rem;font-weight:600" id="perclos-pct">—</div>
+      </div>
+      <div class="perclos-bar-bg">
+        <div class="perclos-bar-fill" id="perclos-bar"></div>
+      </div>
+      <div style="margin-top:6px;font-size:.75rem;color:var(--muted)">
+        Fatigue level: <span id="fatigue-label" style="color:var(--text);font-weight:600">—</span>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<footer>SmartRent AI · Driver Monitoring System · Frame interval: 1 s</footer>
+
+<!-- ── JavaScript ─────────────────────────────────────────────────────────── -->
+<script>
+'use strict';
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const API_BASE      = 'http://localhost:8000';
+const FRAME_INTERVAL_MS = 1000;   // 1 frame/second
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const video       = document.getElementById('webcam');
+const canvas      = document.getElementById('canvas');
+const ctx         = canvas.getContext('2d');
+const btnStart    = document.getElementById('btn-start');
+const btnStop     = document.getElementById('btn-stop');
+const tokenInput  = document.getElementById('token-input');
+const sessionInput= document.getElementById('session-input');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const modeBadge   = document.getElementById('mode-badge');
+
+// Metrics
+const gaugeFill   = document.getElementById('gauge-fill');
+const riskNumber  = document.getElementById('risk-number');
+const riskBadge   = document.getElementById('risk-badge');
+const alertsList  = document.getElementById('alerts-list');
+const frameCount  = document.getElementById('frame-count');
+const errorCount  = document.getElementById('error-count');
+const latencyEl   = document.getElementById('latency');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let monitorInterval = null;
+let stream          = null;
+let frames          = 0;
+let errors          = 0;
+const GAUGE_CIRCUM  = 301.6;   // 2πr where r=48
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+    setStatus('active', 'Camera active — monitoring started');
+    return true;
+  } catch (err) {
+    setStatus('error', `Camera error: ${err.message}`);
+    return false;
+  }
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+}
+
+// ── Frame capture & upload ────────────────────────────────────────────────────
+function captureFrame() {
+  canvas.width  = video.videoWidth  || 640;
+  canvas.height = video.videoHeight || 480;
+  // Draw un-mirrored frame (the CSS mirror is visual only)
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+}
+
+async function sendFrame() {
+  const token = tokenInput.value.trim();
+  if (!token) {
+    setStatus('error', 'No JWT token — please paste your token below');
+    return;
+  }
+
+  captureFrame();
+
+  const t0 = performance.now();
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+
+    const form = new FormData();
+    form.append('image', blob, 'frame.jpg');
+
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const sid = sessionInput.value.trim();
+    if (sid) headers['X-Driver-Session-ID'] = sid;
+
+    try {
+      const resp = await fetch(`${API_BASE}/driver-monitor/upload-frame`, {
+        method: 'POST', headers, body: form,
+      });
+
+      const ms = Math.round(performance.now() - t0);
+      latencyEl.textContent = `${ms} ms`;
+      frames++;
+      frameCount.textContent = frames;
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        handleApiError(err.detail || resp.statusText);
+        return;
+      }
+
+      const data = await resp.json();
+      updateUI(data);
+      setStatus('active', `Monitoring active · session ${data.session_id?.slice(0,8)}…`);
+
+    } catch (netErr) {
+      handleNetworkError(netErr);
+    }
+  }, 'image/jpeg', 0.85);
+}
+
+// ── Error handling ─────────────────────────────────────────────────────────────
+function handleApiError(msg) {
+  errors++;
+  errorCount.textContent = errors;
+  setStatus('error', `API error: ${msg}`);
+  // Don't stop monitoring on a single error — stay resilient
+}
+
+function handleNetworkError(err) {
+  errors++;
+  errorCount.textContent = errors;
+  setStatus('error', `Network error: ${err.message} (retrying…)`);
+}
+
+// ── UI updates ────────────────────────────────────────────────────────────────
+function updateUI(d) {
+  updateRiskGauge(d.risk_score ?? 0);
+  updateAlerts(d.alerts ?? []);
+  updateMetrics(d);
+}
+
+function updateRiskGauge(score) {
+  const clamped = Math.min(100, Math.max(0, score));
+  const offset  = GAUGE_CIRCUM - (GAUGE_CIRCUM * clamped / 100);
+  gaugeFill.style.strokeDashoffset = offset;
+
+  // Colour
+  let colour, bg, label;
+  if (clamped < 30) {
+    colour = 'var(--success)'; bg = 'pill-ok'; label = 'Safe';
+  } else if (clamped < 60) {
+    colour = 'var(--warn)'; bg = 'pill-warn'; label = 'Caution';
+  } else {
+    colour = 'var(--danger)'; bg = 'pill-bad'; label = 'Danger!';
+  }
+  gaugeFill.style.stroke = colour;
+  riskNumber.style.color  = colour;
+  riskNumber.textContent  = clamped;
+  riskBadge.textContent   = label;
+  riskBadge.className     = `risk-level-badge pill ${bg}`;
+  modeBadge.textContent   = clamped === 0 ? 'Active' : label;
+}
+
+function updateAlerts(alerts) {
+  if (!alerts || alerts.length === 0) {
+    alertsList.innerHTML = '<div class="no-alerts">All clear — driver alert</div>';
+    return;
+  }
+  alertsList.innerHTML = alerts.map(a =>
+    `<div class="alert-item">⚠️ ${escapeHtml(a)}</div>`
+  ).join('');
+}
+
+function updateMetrics(d) {
+  // EAR
+  const ear = d.ear;
+  setMetric('ear', ear != null ? ear.toFixed(3) : '—',
+    ear == null ? '' : ear < 0.22 ? 'Closed' : 'Open',
+    ear == null ? 'pill-ok' : ear < 0.22 ? 'pill-bad' : 'pill-ok');
+
+  // Drowsy
+  const drowsy = d.drowsy;
+  setMetric('drowsy', drowsy ? 'Yes' : 'No', d.face_reason || '',
+    drowsy ? 'pill-bad' : 'pill-ok');
+  setMetricActive('mc-drowsy', drowsy);
+
+  // Eye closed
+  const closed = d.eye_closed;
+  setText('mv-eye', closed ? 'Closed' : 'Open');
+  setMetricActive('mc-eye', closed);
+
+  // Blink
+  setText('mv-blink', d.blink_count ?? '—');
+
+  // Yawn
+  setText('mv-yawn', d.yawn_count ?? '—');
+  setText('ms-mar', d.mar != null ? `MAR ${d.mar.toFixed(3)}` : 'MAR —');
+
+  // Phone
+  const phone = d.phone_detected;
+  setMetric('phone', phone ? 'Yes' : 'No', 'YOLO detection',
+    phone ? 'pill-bad' : 'pill-ok');
+  setMetricActive('mc-phone', phone);
+
+  // PERCLOS
+  const pct = d.perclos ?? 0;
+  document.getElementById('perclos-pct').textContent = `${pct.toFixed(1)}%`;
+  document.getElementById('perclos-bar').style.width  = `${Math.min(pct, 100)}%`;
+  document.getElementById('fatigue-label').textContent = d.fatigue_level || '—';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setMetric(key, value, subText, pillClass) {
+  setText(`mv-${key}`, value);
+  const pill = document.getElementById(`mp-${key}`);
+  if (pill) {
+    pill.textContent = subText;
+    pill.className   = `pill ${pillClass}`;
+  }
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function setMetricActive(id, active) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('active', !!active);
+}
+
+function setStatus(type, msg) {
+  statusDot.className  = `status-dot ${type}`;
+  statusText.textContent = msg;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+btnStart.addEventListener('click', async () => {
+  const ok = await startCamera();
+  if (!ok) return;
+
+  btnStart.disabled = true;
+  btnStop.disabled  = false;
+
+  // Send first frame immediately, then every second
+  await sendFrame();
+  monitorInterval = setInterval(sendFrame, FRAME_INTERVAL_MS);
+});
+
+btnStop.addEventListener('click', () => {
+  clearInterval(monitorInterval);
+  monitorInterval = null;
+  stopCamera();
+
+  btnStart.disabled = false;
+  btnStop.disabled  = true;
+  setStatus('', 'Monitoring stopped');
+  modeBadge.textContent = 'Idle';
+});
+
+// Restore token from localStorage for convenience
+const savedToken = localStorage.getItem('smartrent_token');
+if (savedToken) tokenInput.value = savedToken;
+tokenInput.addEventListener('input', () => {
+  localStorage.setItem('smartrent_token', tokenInput.value);
+});
+</script>
+
+</body>
+</html>
