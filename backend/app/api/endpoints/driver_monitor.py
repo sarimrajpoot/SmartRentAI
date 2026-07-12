@@ -1,31 +1,31 @@
-"""
-Driver Monitor endpoint — real-time driver safety analysis.
+# """
+# Driver Monitor endpoint — real-time driver safety analysis.
 
-Pipeline (called in order):
-    1. detect_objects()      → YOLO: list of {class, confidence} dicts
-    2. detect_drowsiness()   → MediaPipe face mesh: {drowsy, ear, yawn{mar,yawning,yawn_count}, reason}
-    3. update_blink_state()  → {blink_count, closed_frames, eye_closed}
-    4. calculate_perclos()   → {perclos, fatigue}
-    5. detect_phone_usage()  → bool
-    6. calculate_risk()      → {risk_score, alerts}
+# Pipeline (called in order):
+#     1. detect_objects()      → YOLO: list of {class, confidence} dicts
+#     2. detect_drowsiness()   → MediaPipe face mesh: {drowsy, ear, yawn{mar,yawning,yawn_count}, reason}
+#     3. update_blink_state()  → {blink_count, closed_frames, eye_closed}
+#     4. calculate_perclos()   → {perclos, fatigue}
+#     5. detect_phone_usage()  → bool
+#     6. calculate_risk()      → {risk_score, alerts}
 
-Response shape (stable contract for the frontend):
-    {
-        "session_id":     str,
-        "risk_score":     int,          # 0–100
-        "alerts":         list[str],
-        "drowsy":         bool,
-        "ear":            float | null,
-        "blink_count":    int,
-        "eye_closed":     bool,
-        "perclos":        float,        # percentage 0–100
-        "fatigue_level":  str,          # "Alert" | "Slightly Fatigued" | …
-        "yawn_count":     int,
-        "mar":            float | null,
-        "phone_detected": bool,
-        "detections":     list[dict],
-    }
-"""
+# Response shape (stable contract for the frontend):
+#     {
+#         "session_id":     str,
+#         "risk_score":     int,          # 0–100
+#         "alerts":         list[str],
+#         "drowsy":         bool,
+#         "ear":            float | null,
+#         "blink_count":    int,
+#         "eye_closed":     bool,
+#         "perclos":        float,        # percentage 0–100
+#         "fatigue_level":  str,          # "Alert" | "Slightly Fatigued" | …
+#         "yawn_count":     int,
+#         "mar":            float | null,
+#         "phone_detected": bool,
+#         "detections":     list[dict],
+#     }
+# """
 
 import uuid
 from pathlib import Path
@@ -61,16 +61,16 @@ _FRAME_DIR.mkdir(parents=True, exist_ok=True)
 )
 async def upload_frame(
     image: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    x_driver_session_id: str | None = Header(
-        None,
-        alias="X-Driver-Session-ID",
-        description=(
-            "Unique session identifier tied to an active rental booking. "
-            "Omit to use the authenticated user's ID as the session key."
-        ),
-    ),
-    current_user: User = Depends(get_current_user),
+    # db: Session = Depends(get_db),
+    # x_driver_session_id: str | None = Header(
+    #     None,
+    #     alias="X-Driver-Session-ID",
+    #     description=(
+    #         "Unique session identifier tied to an active rental booking. "
+    #         "Omit to use the authenticated user's ID as the session key."
+    #     ),
+    # ),
+    # current_user: User = Depends(get_current_user),
 ):
     # ── 1. MIME validation ───────────────────────────────────────────────────
     if image.content_type not in settings.allowed_mime_types_list:
@@ -98,55 +98,67 @@ async def upload_frame(
     frame_path.write_bytes(content)
 
     try:
-        # ── 4. Per-session state ─────────────────────────────────────────────
-        session_id = x_driver_session_id or str(current_user.id)
-        state = driver_state_manager.get_or_create(session_id)
+      state = driver_state_manager.get_or_create("debug")
 
-        # ── 5. Full AI pipeline ──────────────────────────────────────────────
-        # Returns: list[{class: str, confidence: float}]
-        detections = detect_objects(str(frame_path))
+      drowsiness = detect_drowsiness(str(frame_path), state)
 
-        # Returns: {drowsy, ear, yawn: {mar, yawning, yawn_count}, reason}
-        drowsiness = detect_drowsiness(str(frame_path), state)
+      return {
+        "status": "OK",
+        "drowsiness": drowsiness
+    }
+        # # ── 4. Per-session state ─────────────────────────────────────────────
+        # session_id = x_driver_session_id or str(current_user.id)
+        # state = driver_state_manager.get_or_create(session_id)
 
-        # Returns: {blink_count, closed_frames, eye_closed}
-        blink = update_blink_state(drowsiness.get("ear"), state)
+        # # ── 5. Full AI pipeline ──────────────────────────────────────────────
+        # # Returns: list[{class: str, confidence: float}]
+        # detections = detect_objects(str(frame_path))
 
-        # Returns: {perclos: float (0-100), fatigue: str}
-        perclos = calculate_perclos(state)
+        # # Returns: {drowsy, ear, yawn: {mar, yawning, yawn_count}, reason}
+        # drowsiness = detect_drowsiness(str(frame_path), state)
 
-        # Returns: bool  (person + cell phone both in frame)
-        phone_detected = detect_phone_usage(detections)
+        # # Returns: {blink_count, closed_frames, eye_closed}
+        # blink = update_blink_state(drowsiness.get("ear"), state)
 
-        # Returns: {risk_score: int, alerts: list[str]}
-        risk = calculate_risk(phone_usage=phone_detected)
+        # # Returns: {perclos: float (0-100), fatigue: str}
+        # perclos = calculate_perclos(state)
+
+        # # Returns: bool  (person + cell phone both in frame)
+        # phone_detected = detect_phone_usage(detections)
+
+        # # Returns: {risk_score: int, alerts: list[str]}
+        # risk = calculate_risk(phone_usage=phone_detected)
 
     finally:
         frame_path.unlink(missing_ok=True)
 
-    # ── 6. Flatten into a stable, frontend-friendly response ─────────────────
-    yawn_info = drowsiness.get("yawn") or {}
-    response = {
-        "session_id":    session_id,
-        # Top-level risk
-        "risk_score":    risk["risk_score"],
-        "alerts":        risk["alerts"],
-        # Drowsiness
-        "drowsy":        drowsiness.get("drowsy", False),
-        "ear":           drowsiness.get("ear"),
-        "face_reason":   drowsiness.get("reason", ""),
-        # Blink
-        "blink_count":   blink.get("blink_count", 0) if isinstance(blink, dict) else blink,
-        "eye_closed":    blink.get("eye_closed", False) if isinstance(blink, dict) else False,
-        # PERCLOS / fatigue
-        "perclos":       perclos.get("perclos", 0.0) if isinstance(perclos, dict) else perclos,
-        "fatigue_level": perclos.get("fatigue", "Unknown") if isinstance(perclos, dict) else "Unknown",
-        # Yawn
-        "yawn_count":    yawn_info.get("yawn_count", state.yawn_count),
-        "mar":           yawn_info.get("mar"),
-        # Phone
-        "phone_detected": phone_detected,
-        # Raw detections (for debugging / future features)
-        "detections":    detections,
+
+    return {
+        "status": "OK"
     }
-    return JSONResponse(content=response)
+    # # ── 6. Flatten into a stable, frontend-friendly response ─────────────────
+    # yawn_info = drowsiness.get("yawn") or {}
+    # response = {
+    #     "session_id":    session_id,
+    #     # Top-level risk
+    #     "risk_score":    risk["risk_score"],
+    #     "alerts":        risk["alerts"],
+    #     # Drowsiness
+    #     "drowsy":        drowsiness.get("drowsy", False),
+    #     "ear":           drowsiness.get("ear"),
+    #     "face_reason":   drowsiness.get("reason", ""),
+    #     # Blink
+    #     "blink_count":   blink.get("blink_count", 0) if isinstance(blink, dict) else blink,
+    #     "eye_closed":    blink.get("eye_closed", False) if isinstance(blink, dict) else False,
+    #     # PERCLOS / fatigue
+    #     "perclos":       perclos.get("perclos", 0.0) if isinstance(perclos, dict) else perclos,
+    #     "fatigue_level": perclos.get("fatigue", "Unknown") if isinstance(perclos, dict) else "Unknown",
+    #     # Yawn
+    #     "yawn_count":    yawn_info.get("yawn_count", state.yawn_count),
+    #     "mar":           yawn_info.get("mar"),
+    #     # Phone
+    #     "phone_detected": phone_detected,
+    #     # Raw detections (for debugging / future features)
+    #     "detections":    detections,
+    # }
+    # return JSONResponse(content=response)

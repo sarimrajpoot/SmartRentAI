@@ -78,12 +78,17 @@ class Car(Base):
         onupdate=func.now()
     )
 
-    owner = relationship(
-        "User",
-        back_populates="cars"
-    )
+    owner = relationship("User", back_populates="cars")
+
     bookings = relationship(
-    "Booking",
-    back_populates="car",
-    cascade="all, delete-orphan"
-)
+        "Booking",
+        back_populates="car",
+        cascade="all, delete-orphan",
+    )
+
+    locations = relationship(
+        "VehicleLocation",
+        back_populates="car",
+        cascade="all, delete-orphan",
+        order_by="VehicleLocation.timestamp",
+    )

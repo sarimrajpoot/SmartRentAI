@@ -68,3 +68,10 @@ class Booking(Base):
         "Car",
         back_populates="bookings"
     )
+
+    locations = relationship(
+        "VehicleLocation",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        order_by="VehicleLocation.timestamp",
+    )

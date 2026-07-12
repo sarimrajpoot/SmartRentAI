@@ -8,21 +8,31 @@ def distance(p1, p2):
     )
 
 
-def calculate_mar(face_landmarks):
+def calculate_mar(landmarks):
     """
-    MAR = Mouth Aspect Ratio
+    Mouth Aspect Ratio (MAR) using the standard dlib 68-point formula.
     """
 
-    upper = face_landmarks.landmark[13]
-    lower = face_landmarks.landmark[14]
+    p60 = landmarks.part(60)
+    p61 = landmarks.part(61)
+    p62 = landmarks.part(62)
+    p63 = landmarks.part(63)
+    p64 = landmarks.part(64)
+    p65 = landmarks.part(65)
+    p66 = landmarks.part(66)
+    p67 = landmarks.part(67)
 
-    left = face_landmarks.landmark[78]
-    right = face_landmarks.landmark[308]
+    A = distance(p61, p67)
+    B = distance(p62, p66)
+    C = distance(p63, p65)
 
-    vertical = distance(upper, lower)
-    horizontal = distance(left, right)
+    D = distance(p60, p64)
 
-    if horizontal == 0:
-        return 0
+    if D == 0:
+        return 0.0
 
-    return vertical / horizontal
+    mar = (A + B + C) / (3.0 * D)
+
+    print(f"MAR: {mar:.3f}")
+
+    return mar
