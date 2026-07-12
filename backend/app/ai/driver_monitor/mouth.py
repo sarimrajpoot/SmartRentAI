@@ -33,6 +33,4 @@ def calculate_mar(landmarks):
 
     mar = (A + B + C) / (3.0 * D)
 
-    print(f"MAR: {mar:.3f}")
-
     return mar
