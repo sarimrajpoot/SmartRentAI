@@ -28,6 +28,8 @@
 # """
 
 import uuid
+import cv2
+import numpy as np
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
@@ -61,16 +63,16 @@ _FRAME_DIR.mkdir(parents=True, exist_ok=True)
 )
 async def upload_frame(
     image: UploadFile = File(...),
-    # db: Session = Depends(get_db),
-    # x_driver_session_id: str | None = Header(
-    #     None,
-    #     alias="X-Driver-Session-ID",
-    #     description=(
-    #         "Unique session identifier tied to an active rental booking. "
-    #         "Omit to use the authenticated user's ID as the session key."
-    #     ),
-    # ),
-    # current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_driver_session_id: str | None = Header(
+        None,
+        alias="X-Driver-Session-ID",
+        description=(
+            "Unique session identifier tied to an active rental booking. "
+            "Omit to use the authenticated user's ID as the session key."
+        ),
+    ),
+    current_user: User = Depends(get_current_user),
 ):
     # ── 1. MIME validation ───────────────────────────────────────────────────
     if image.content_type not in settings.allowed_mime_types_list:
@@ -92,73 +94,87 @@ async def upload_frame(
             detail=f"File size exceeds the {settings.MAX_UPLOAD_SIZE_MB} MB limit.",
         )
 
-    # ── 3. Persist frame temporarily (AI modules read from disk) ────────────
-    extension = Path(image.filename or "frame.jpg").suffix or ".jpg"
-    frame_path = _FRAME_DIR / f"{uuid.uuid4()}{extension}"
-    frame_path.write_bytes(content)
+    # ── 3. Read frame into memory (No Disk I/O) ────────────────────────────
+    nparr = np.frombuffer(content, np.uint8)
+    image_data = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    if image_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to decode image data.",
+        )
 
     try:
-      state = driver_state_manager.get_or_create("debug")
+        # ── 4. Per-session state ─────────────────────────────────────────────
+        session_id = x_driver_session_id or str(current_user.id)
+        state = driver_state_manager.get_or_create(session_id)
 
-      drowsiness = detect_drowsiness(str(frame_path), state)
+        # ── 5. Full AI pipeline ──────────────────────────────────────────────
+        # Returns: list[{class: str, confidence: float}]
+        detections = detect_objects(image_data)
 
-      return {
-        "status": "OK",
-        "drowsiness": drowsiness
+        # Returns: {drowsy, ear, yawn: {mar, yawning, yawn_count}, reason, head_pose, looking_away}
+        drowsiness = detect_drowsiness(image_data, state)
+
+        # Returns: {blink_count, closed_frames, eye_closed}
+        blink = update_blink_state(drowsiness.get("ear"), state)
+
+        # Returns: {perclos: float (0-100), fatigue: str}
+        perclos = calculate_perclos(state)
+
+        # Returns: bool  (person + cell phone both in frame)
+        phone_detected = detect_phone_usage(detections)
+        
+        looking_away = drowsiness.get("looking_away", False)
+
+        # Returns: {risk_score: int, alerts: list[str], attention_score: float}
+        risk = calculate_risk(
+            state=state, 
+            perclos_data=perclos, 
+            phone_usage=phone_detected, 
+            looking_away=looking_away
+        )
+
+        print(f"\n[AI Calibration] Session {session_id}")
+        print(f"EAR Average: {drowsiness.get('ear')} | MAR: {drowsiness.get('yawn', {}).get('mar')}")
+        print(f"Blink Count: {blink.get('blink_count')} | Yawn Count: {state.yawn_count}")
+        print(f"PERCLOS: {perclos.get('perclos')}% | Attention Score: {risk.get('attention_score')}")
+        print("-" * 50)
+
+    except Exception as e:
+        print(f"Error in pipeline: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # ── 6. Flatten into a stable, frontend-friendly response ─────────────────
+    yawn_info = drowsiness.get("yawn") or {}
+    response = {
+        "session_id":    session_id,
+        # Top-level risk
+        "risk_score":    risk["risk_score"],
+        "alerts":        risk["alerts"],
+        # Drowsiness
+        "drowsy":        drowsiness.get("drowsy", False),
+        "ear":           drowsiness.get("ear"),
+        "left_ear":      drowsiness.get("left_ear"),
+        "right_ear":     drowsiness.get("right_ear"),
+        "face_reason":   drowsiness.get("reason", ""),
+        "left_eye":      drowsiness.get("left_eye"),
+        "right_eye":     drowsiness.get("right_eye"),
+        "face_box":      drowsiness.get("face_box"),
+        # Blink
+        "blink_count":   blink.get("blink_count", 0) if isinstance(blink, dict) else blink,
+        "eye_closed":    blink.get("eye_closed", False) if isinstance(blink, dict) else False,
+        # PERCLOS / fatigue / attention
+        "perclos":       perclos.get("perclos", 0.0) if isinstance(perclos, dict) else perclos,
+        "fatigue_level": perclos.get("fatigue", "Unknown") if isinstance(perclos, dict) else "Unknown",
+        "attention_score": risk.get("attention_score", 100),
+        "looking_away":  drowsiness.get("looking_away", False),
+        # Yawn
+        "yawn_count":    yawn_info.get("yawn_count", state.yawn_count),
+        "mar":           yawn_info.get("mar"),
+        # Phone
+        "phone_detected": phone_detected,
+        # Raw detections (for debugging / future features)
+        "detections":    detections,
     }
-        # # ── 4. Per-session state ─────────────────────────────────────────────
-        # session_id = x_driver_session_id or str(current_user.id)
-        # state = driver_state_manager.get_or_create(session_id)
-
-        # # ── 5. Full AI pipeline ──────────────────────────────────────────────
-        # # Returns: list[{class: str, confidence: float}]
-        # detections = detect_objects(str(frame_path))
-
-        # # Returns: {drowsy, ear, yawn: {mar, yawning, yawn_count}, reason}
-        # drowsiness = detect_drowsiness(str(frame_path), state)
-
-        # # Returns: {blink_count, closed_frames, eye_closed}
-        # blink = update_blink_state(drowsiness.get("ear"), state)
-
-        # # Returns: {perclos: float (0-100), fatigue: str}
-        # perclos = calculate_perclos(state)
-
-        # # Returns: bool  (person + cell phone both in frame)
-        # phone_detected = detect_phone_usage(detections)
-
-        # # Returns: {risk_score: int, alerts: list[str]}
-        # risk = calculate_risk(phone_usage=phone_detected)
-
-    finally:
-        frame_path.unlink(missing_ok=True)
-
-
-    return {
-        "status": "OK"
-    }
-    # # ── 6. Flatten into a stable, frontend-friendly response ─────────────────
-    # yawn_info = drowsiness.get("yawn") or {}
-    # response = {
-    #     "session_id":    session_id,
-    #     # Top-level risk
-    #     "risk_score":    risk["risk_score"],
-    #     "alerts":        risk["alerts"],
-    #     # Drowsiness
-    #     "drowsy":        drowsiness.get("drowsy", False),
-    #     "ear":           drowsiness.get("ear"),
-    #     "face_reason":   drowsiness.get("reason", ""),
-    #     # Blink
-    #     "blink_count":   blink.get("blink_count", 0) if isinstance(blink, dict) else blink,
-    #     "eye_closed":    blink.get("eye_closed", False) if isinstance(blink, dict) else False,
-    #     # PERCLOS / fatigue
-    #     "perclos":       perclos.get("perclos", 0.0) if isinstance(perclos, dict) else perclos,
-    #     "fatigue_level": perclos.get("fatigue", "Unknown") if isinstance(perclos, dict) else "Unknown",
-    #     # Yawn
-    #     "yawn_count":    yawn_info.get("yawn_count", state.yawn_count),
-    #     "mar":           yawn_info.get("mar"),
-    #     # Phone
-    #     "phone_detected": phone_detected,
-    #     # Raw detections (for debugging / future features)
-    #     "detections":    detections,
-    # }
-    # return JSONResponse(content=response)
+    return JSONResponse(content=response)

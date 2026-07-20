@@ -10,11 +10,12 @@ from app.ai.driver_monitor.eye_utils import eye_aspect_ratio
 from app.ai.driver_monitor.mouth import calculate_mar
 from app.ai.driver_monitor.yawn import update_yawn_state
 from app.ai.driver_monitor.config import EAR_THRESHOLD
+from app.ai.driver_monitor.head_pose import get_head_pose
 
 
-def detect_drowsiness(image_path, state):
+def detect_drowsiness(image_data, state):
 
-    landmarks = get_face_landmarks(image_path)
+    landmarks = get_face_landmarks(image_data)
 
     if landmarks is None:
         return {
@@ -42,14 +43,28 @@ def detect_drowsiness(image_path, state):
     mar = calculate_mar(landmarks)
 
     yawn = update_yawn_state(mar, state)
+    
+    head_pose = get_head_pose(landmarks, image_data.shape)
 
     return {
         "drowsy": ear < EAR_THRESHOLD,
         "ear": round(ear, 3),
+        "left_ear": round(left_ear, 3),
+        "right_ear": round(right_ear, 3),
         "yawn": yawn,
+        "head_pose": head_pose,
+        "looking_away": head_pose["looking_away"],
         "reason": (
             "Eyes appear closed"
             if ear < EAR_THRESHOLD
             else "Eyes open"
-        )
+        ),
+        "left_eye": left_eye,
+        "right_eye": right_eye,
+        "face_box": [
+            min([p.x for p in landmarks.parts()]),
+            min([p.y for p in landmarks.parts()]),
+            max([p.x for p in landmarks.parts()]),
+            max([p.y for p in landmarks.parts()])
+        ]
     }

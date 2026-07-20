@@ -20,6 +20,11 @@ class CarCreate(BaseModel):
     seats: int
     daily_price: Decimal
     city: str
+    is_available: bool = True
+    images: list[str] = []
+    gps_device_id: str | None = None
+    fuel_sensor_id: str | None = None
+    ai_vehicle_score: float | None = None
 
 
 class CarUpdate(BaseModel):
@@ -39,6 +44,10 @@ class CarUpdate(BaseModel):
     daily_price: Decimal | None = None
     city: str | None = None
     is_available: bool | None = None
+    images: list[str] | None = None
+    gps_device_id: str | None = None
+    fuel_sensor_id: str | None = None
+    ai_vehicle_score: float | None = None
 
 
 class CarResponse(BaseModel):
@@ -59,6 +68,9 @@ class CarResponse(BaseModel):
     city: str
     is_available: bool
     image_url: str | None = None
+    images: list[str] = []
+    gps_device_id: str | None = None
+    fuel_sensor_id: str | None = None
     ai_vehicle_score: float | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

@@ -18,10 +18,28 @@ class UserResponse(BaseModel):
     id: UUID
     full_name: str
     email: EmailStr
-    phone: str
+    phone: str | None = None
     role: UserRole
+    cnic: str | None = None
+    driving_license: str | None = None
+    address: str | None = None
+    profile_picture: str | None = None
+
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    cnic: str | None = None
+    driving_license: str | None = None
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
 
 class UserLogin(BaseModel):
     email: EmailStr

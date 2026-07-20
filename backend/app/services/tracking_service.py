@@ -24,7 +24,7 @@ from app.models.car import Car
 from app.models.user import User
 from app.models.vehicle_location import VehicleLocation
 from app.schemas.tracking import LocationUpload, TripSummary
-
+from app.services.theft_detection_service import analyze_location
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -167,6 +167,9 @@ def record_location(
     db.add(location)
     db.commit()
     db.refresh(location)
+    events = analyze_location(location)
+    for event in events:
+        print(event)
     return location
 
 

@@ -24,4 +24,8 @@ def eye_aspect_ratio(points):
     A = np.linalg.norm(p[1] - p[5])
     B = np.linalg.norm(p[2] - p[4])
     C = np.linalg.norm(p[0] - p[3])
-    return float((A + B) / (2.0 * C)) if C != 0 else 0.0
+    ear = float((A + B) / (2.0 * C)) if C != 0 else 0.0
+    
+    print(f"[EAR DEBUG] V1: {A:.2f}, V2: {B:.2f}, H: {C:.2f}, Computed EAR: {ear:.3f}")
+    
+    return ear

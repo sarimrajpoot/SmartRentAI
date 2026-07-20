@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, require_role
 from app.database.dependencies import get_db
+from app.enums.booking import BookingStatus
 from app.enums.user import UserRole
 from app.models.user import User
-from app.schemas.booking import BookingCreate, BookingResponse
+from app.schemas.booking import BookingCreate, BookingResponse, BookingListResponse
 from app.services.booking_service import (
     approve_booking,
     cancel_booking,
@@ -54,15 +55,33 @@ def book_car(
 
 @router.get(
     "/my",
-    response_model=List[BookingResponse],
+    response_model=BookingListResponse,
     summary="List my bookings",
 )
 def my_bookings(
+    page: int = 1,
+    limit: int = 10,
+    search: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.CUSTOMER)),
 ):
-    """Return all bookings placed by the authenticated customer, newest first."""
-    return get_customer_bookings(db=db, customer_id=current_user.id)
+    """Return paginated bookings placed by the authenticated customer."""
+    skip = (page - 1) * limit
+    items, total = get_customer_bookings(
+        db=db, 
+        customer_id=current_user.id, 
+        skip=skip, 
+        limit=limit, 
+        search=search
+    )
+    
+    return BookingListResponse(
+        items=[BookingResponse.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=(total + limit - 1) // limit if limit > 0 else 1
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -71,15 +90,36 @@ def my_bookings(
 
 @router.get(
     "/owner",
-    response_model=List[BookingResponse],
+    response_model=BookingListResponse,
     summary="List bookings for my cars",
 )
 def owner_bookings(
+    page: int = 1,
+    limit: int = 10,
+    search: str | None = None,
+    status_filter: BookingStatus | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.SHOWROOM, UserRole.ADMIN)),
 ):
-    """Return all bookings across cars owned by the authenticated showroom, newest first."""
-    return get_owner_bookings(db=db, owner_id=current_user.id)
+    """Return paginated bookings across cars owned by the authenticated showroom."""
+    skip = (page - 1) * limit
+    status_str = status_filter.value if status_filter else None
+    items, total = get_owner_bookings(
+        db=db, 
+        owner_id=current_user.id, 
+        skip=skip, 
+        limit=limit, 
+        status=status_str, 
+        search=search
+    )
+    
+    return BookingListResponse(
+        items=[BookingResponse.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=(total + limit - 1) // limit if limit > 0 else 1
+    )
 
 
 # ---------------------------------------------------------------------------

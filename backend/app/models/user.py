@@ -25,6 +25,10 @@ class User(Base):
     cnic = Column(String)
 
     driving_license = Column(String)
+    
+    address = Column(String, nullable=True)
+
+    profile_picture = Column(String, nullable=True)
 
     risk_score = Column(Float, default=0)
 

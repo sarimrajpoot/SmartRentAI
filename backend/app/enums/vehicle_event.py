@@ -1,0 +1,18 @@
+from enum import Enum
+
+
+class VehicleEventType(str, Enum):
+    UNEXPECTED_MOVEMENT = "UNEXPECTED_MOVEMENT"
+    SPEEDING = "SPEEDING"
+    GPS_LOST = "GPS_LOST"
+    GEOFENCE_EXIT = "GEOFENCE_EXIT"
+    GEOFENCE_ENTER = "GEOFENCE_ENTER"
+    TRACKER_OFFLINE = "TRACKER_OFFLINE"
+    BATTERY_DISCONNECTED = "BATTERY_DISCONNECTED"
+
+
+class VehicleEventSeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"

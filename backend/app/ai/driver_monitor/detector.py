@@ -14,11 +14,11 @@ def get_model():
     return model
 
 
-def detect_objects(image_path: str):
+def detect_objects(image_data):
 
     model = get_model()
 
-    results = model(image_path)
+    results = model(image_data, verbose=False)
 
     detections = []
 
@@ -31,6 +31,7 @@ def detect_objects(image_path: str):
                 {
                     "class": result.names[cls],
                     "confidence": round(confidence, 3),
+                    "box": [float(box.xyxy[0][0]), float(box.xyxy[0][1]), float(box.xyxy[0][2]), float(box.xyxy[0][3])]
                 }
             )
 

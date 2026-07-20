@@ -10,7 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
 )
-from sqlalchemy import Numeric
+from sqlalchemy import Numeric, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -59,7 +59,9 @@ class Car(Base):
 
     is_available = Column(Boolean, default=True)
 
-    image_url = Column(String, nullable=True)
+    image_url = Column(String, nullable=True) # Legacy
+    
+    images = Column(JSON, default=list, nullable=False, server_default='[]')
 
     gps_device_id = Column(String)
 
@@ -91,4 +93,10 @@ class Car(Base):
         back_populates="car",
         cascade="all, delete-orphan",
         order_by="VehicleLocation.timestamp",
+    )
+
+    events = relationship(
+    "VehicleEvent",
+    back_populates="car",
+    cascade="all, delete-orphan",
     )

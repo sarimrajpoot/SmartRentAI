@@ -16,13 +16,11 @@ _model_path = (
 _predictor = dlib.shape_predictor(str(_model_path))
 
 
-def get_face_landmarks(image_path):
+def get_face_landmarks(image):
     """
     Returns a dlib.full_object_detection object
     or None if no face is detected.
     """
-
-    image = cv2.imread(image_path)
 
     if image is None:
         return None

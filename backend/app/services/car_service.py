@@ -12,9 +12,7 @@ from app.enums.user import UserRole
 from app.models.car import Car
 from app.models.user import User
 from app.schemas.car import CarCreate, CarUpdate
-
-# Directory where car images are stored.
-CAR_UPLOAD_DIR = Path("uploads/cars")
+from app.services.storage import get_storage_service
 
 
 def create_car(
@@ -54,10 +52,13 @@ def get_cars(
     fuel_type: FuelType | None = None,
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
+    seats: int | None = None,
     is_available: bool | None = None,
     search: str | None = None,
+    sort_by: str = "newest",
     page: int = 1,
     limit: int = 20,
+    owner_id: UUID | None = None,
 ) -> tuple[list[Car], int]:
     """
     Return (cars, total_count) applying optional filters and pagination.
@@ -66,10 +67,16 @@ def get_cars(
         - brand / model / city : case-insensitive partial match
         - transmission / fuel_type : exact enum match
         - price_min / price_max : inclusive daily price range
+        - seats : exact match
         - is_available : exact boolean match
-        - search : case-insensitive OR match across brand, model, city, variant
+        - search : case-insensitive OR match across brand, model, city, variant, license_plate
+        - owner_id : exact match
     """
     query = db.query(Car)
+
+    # --- Ownership filter ---
+    if owner_id is not None:
+        query = query.filter(Car.owner_id == owner_id)
 
     # --- Enum / boolean filters (exact match) ---
     if transmission is not None:
@@ -79,11 +86,13 @@ def get_cars(
     if is_available is not None:
         query = query.filter(Car.is_available == is_available)
 
-    # --- Price range ---
+    # --- Price range & seats ---
     if price_min is not None:
         query = query.filter(Car.daily_price >= price_min)
     if price_max is not None:
         query = query.filter(Car.daily_price <= price_max)
+    if seats is not None:
+        query = query.filter(Car.seats == seats)
 
     # --- Partial-text filters ---
     if brand:
@@ -102,14 +111,29 @@ def get_cars(
                 Car.model.ilike(term),
                 Car.city.ilike(term),
                 Car.variant.ilike(term),
+                Car.license_plate.ilike(term),
             )
         )
+
+    # --- Sorting ---
+    if sort_by == "oldest":
+        query = query.order_by(Car.created_at.asc())
+    elif sort_by == "price_asc":
+        query = query.order_by(Car.daily_price.asc())
+    elif sort_by == "price_desc":
+        query = query.order_by(Car.daily_price.desc())
+    elif sort_by == "ai_score_desc":
+        query = query.order_by(Car.ai_vehicle_score.desc())
+    elif sort_by == "alphabetical":
+        query = query.order_by(Car.brand.asc(), Car.model.asc())
+    else:
+        # Default to newest
+        query = query.order_by(Car.created_at.desc())
 
     total = query.count()
     offset = (page - 1) * limit
     cars = (
         query
-        .order_by(Car.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -165,6 +189,13 @@ def delete_car(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not authorized to delete this car.",
         )
+        
+    storage = get_storage_service()
+    if car.image_url:
+        storage.delete_file(car.image_url)
+    if car.images:
+        for url in car.images:
+            storage.delete_file(url)
 
     db.delete(car)
     db.commit()
@@ -194,14 +225,21 @@ def upload_car_image(
             detail="You are not authorized to upload an image for this car.",
         )
 
-    CAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    storage = get_storage_service()
+    url = storage.save_file(image_content, original_filename, "cars")
 
-    extension = Path(original_filename).suffix
-    filename = f"{uuid.uuid4()}{extension}"
-    destination = CAR_UPLOAD_DIR / filename
-    destination.write_bytes(image_content)
+    if car.images is None:
+        car.images = []
+        
+    # We create a new list so SQLAlchemy detects the mutation of JSON
+    new_images = list(car.images)
+    new_images.append(url)
+    car.images = new_images
+    
+    # Also set primary image_url if not set (for legacy support/convenience)
+    if not car.image_url:
+        car.image_url = url
 
-    car.image_url = f"/uploads/cars/{filename}"
     db.commit()
     db.refresh(car)
     return car

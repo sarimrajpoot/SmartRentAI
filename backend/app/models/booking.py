@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Enum,
     Numeric,
+    Boolean,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -41,6 +42,18 @@ class Booking(Base):
         Numeric(10, 2),
         nullable=False
     )
+    
+    with_driver = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+    
+    with_insurance = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
 
     status = Column(
     Enum(BookingStatus),
@@ -74,4 +87,16 @@ class Booking(Base):
         back_populates="booking",
         cascade="all, delete-orphan",
         order_by="VehicleLocation.timestamp",
+    )
+    
+    events = relationship(
+        "VehicleEvent",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+    )
+    
+    damage_reports = relationship(
+        "DamageReport",
+        back_populates="booking",
+        cascade="all, delete-orphan",
     )

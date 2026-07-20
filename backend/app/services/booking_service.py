@@ -21,7 +21,8 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, or_
+from fastapi import HTTPException, status
+from sqlalchemy import and_, or_, cast, String
 from sqlalchemy.orm import Session
 
 from app.enums.booking import BookingStatus
@@ -157,7 +158,18 @@ def create_booking(
         )
 
     days = (booking.end_date - booking.start_date).days
+    if days == 0:
+        days = 1 # Minimum 1 day rental
+
+    # Base price
     total_price = days * car.daily_price
+
+    # Extras
+    if booking.with_driver:
+        total_price += days * 2000
+        
+    if booking.with_insurance:
+        total_price += days * 1500
 
     new_booking = Booking(
         customer_id=customer_id,
@@ -165,6 +177,8 @@ def create_booking(
         start_date=booking.start_date,
         end_date=booking.end_date,
         total_price=total_price,
+        with_driver=booking.with_driver,
+        with_insurance=booking.with_insurance,
         status=BookingStatus.PENDING,
     )
     db.add(new_booking)
@@ -200,25 +214,62 @@ def get_booking_by_id(db: Session, booking_id: UUID, current_user: User) -> Book
     return booking
 
 
-def get_customer_bookings(db: Session, customer_id: UUID) -> list[Booking]:
-    """Return all bookings for a customer, newest first."""
-    return (
-        db.query(Booking)
-        .filter(Booking.customer_id == customer_id)
-        .order_by(Booking.created_at.desc())
-        .all()
-    )
+def get_customer_bookings(
+    db: Session, 
+    customer_id: UUID, 
+    skip: int = 0, 
+    limit: int = 10,
+    search: str | None = None
+) -> tuple[list[Booking], int]:
+    """Return all bookings for a customer, newest first, with pagination."""
+    query = db.query(Booking).filter(Booking.customer_id == customer_id)
+    
+    if search:
+        query = query.join(Car, Booking.car_id == Car.id).filter(
+            or_(
+                Car.brand.ilike(f"%{search}%"),
+                Car.model.ilike(f"%{search}%"),
+                cast(Booking.id, String).ilike(f"%{search}%")
+            )
+        )
+        
+    total_count = query.count()
+    items = query.order_by(Booking.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return items, total_count
 
 
-def get_owner_bookings(db: Session, owner_id: UUID) -> list[Booking]:
-    """Return all bookings on cars owned by owner_id, newest first."""
-    return (
+def get_owner_bookings(
+    db: Session, 
+    owner_id: UUID, 
+    skip: int = 0, 
+    limit: int = 10,
+    status: str | None = None,
+    search: str | None = None
+) -> tuple[list[Booking], int]:
+    """Return all bookings on cars owned by owner_id, newest first, with pagination."""
+    query = (
         db.query(Booking)
         .join(Car, Booking.car_id == Car.id)
         .filter(Car.owner_id == owner_id)
-        .order_by(Booking.created_at.desc())
-        .all()
     )
+    
+    if status:
+        query = query.filter(Booking.status == status)
+        
+    if search:
+        query = query.filter(
+            or_(
+                Car.brand.ilike(f"%{search}%"),
+                Car.model.ilike(f"%{search}%"),
+                cast(Booking.id, String).ilike(f"%{search}%")
+            )
+        )
+        
+    total_count = query.count()
+    items = query.order_by(Booking.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return items, total_count
 
 
 def approve_booking(db: Session, booking_id: UUID, current_user: User) -> Booking:
